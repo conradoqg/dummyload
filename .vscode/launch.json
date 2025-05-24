@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug dummyload",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}",
+      "args": [
+        "-cpu",
+        "50",
+        "-mem",
+        "200",
+        "-port",
+        "8081"
+      ],
+      "env": {}
+    }
+  ]
+}

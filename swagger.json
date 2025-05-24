@@ -1,0 +1,65 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "dummyload API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/load": {
+      "get": {
+        "summary": "Get current and target load",
+        "responses": {
+          "200": {
+            "description": "Load information",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/LoadResponse"}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Update target load",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/LoadRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated load info",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/LoadResponse"}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LoadRequest": {
+        "type": "object",
+        "properties": {
+          "cpu": {"type": "number", "format": "float", "minimum": 0, "maximum": 100},
+          "mem": {"type": "integer", "format": "int64", "minimum": 0}
+        }
+      },
+      "LoadResponse": {
+        "type": "object",
+        "properties": {
+          "target_cpu": {"type": "number", "format": "float"},
+          "actual_cpu": {"type": "number", "format": "float"},
+          "target_memory_mb": {"type": "integer", "format": "int64"},
+          "actual_memory_mb": {"type": "integer", "format": "int64"}
+        }
+      }
+    }
+  }
+}
