@@ -13,6 +13,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dummyload main.go
 # Final stage: minimal static image
 FROM scratch
 COPY --from=builder /app/dummyload /dummyload
-EXPOSE 8081
+EXPOSE 8080
 ENTRYPOINT ["/dummyload"]
-CMD ["-cpu", "0", "-mem", "0", "-port", "8081"]
+CMD ["-cores", "0", "-mem", "0", "-port", "8080"]

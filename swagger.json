@@ -7,7 +7,7 @@
   "paths": {
     "/api/v1/load": {
       "get": {
-        "summary": "Get current and target load",
+        "summary": "Get current and target CPU cores and memory load",
         "responses": {
           "200": {
             "description": "Load information",
@@ -20,7 +20,7 @@
         }
       },
       "post": {
-        "summary": "Update target load",
+        "summary": "Update target CPU cores and memory load",
         "requestBody": {
           "required": true,
           "content": {
@@ -47,17 +47,18 @@
       "LoadRequest": {
         "type": "object",
         "properties": {
-          "cpu": {"type": "number", "format": "float", "minimum": 0, "maximum": 100},
+          "cores": {"type": "number", "format": "float", "minimum": 0},
           "mem": {"type": "integer", "format": "int64", "minimum": 0}
-        }
+        },
+        "description": "Specify desired CPU load in cores (can be fractional) and/or memory in MB."
       },
       "LoadResponse": {
         "type": "object",
         "properties": {
-          "target_cpu": {"type": "number", "format": "float"},
-          "actual_cpu": {"type": "number", "format": "float"},
-          "target_memory_mb": {"type": "integer", "format": "int64"},
-          "actual_memory_mb": {"type": "integer", "format": "int64"}
+          "target_cores": {"type": "number", "format": "float", "description": "Requested CPU load in cores."},
+          "actual_cores": {"type": "number", "format": "float", "description": "Measured CPU load in cores."},
+          "target_memory_mb": {"type": "integer", "format": "int64", "description": "Requested memory load in megabytes."},
+          "actual_memory_mb": {"type": "integer", "format": "int64", "description": "Measured memory load in megabytes."}
         }
       }
     }

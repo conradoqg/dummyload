@@ -15,7 +15,7 @@ build:
 	go build -ldflags="-s -w" -o $(APP) main.go
 
 run: build
-	./$(APP) -cpu 50 -mem 200 -port 8080
+	./$(APP) -cores 1.5 -mem 200 -port 8080
 
 clean:
 	rm -f $(APP)
@@ -24,4 +24,4 @@ docker-build:
 	docker build -t $(APP):$(VERSION) .
 
 docker-run: docker-build
-	docker run --rm -p 8081:8081 $(APP):$(VERSION)
+	docker run --rm -p 8080:8080 $(APP):$(VERSION)

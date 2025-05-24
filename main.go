@@ -52,10 +52,10 @@ func docsHandler(w http.ResponseWriter, r *http.Request) {
 
 // Globals for CPU and memory load
 var (
-    targetCPU   float64   // desired load in cores (can be fractional)
+    targetCPU   float64   // desired CPU load in cores (fractional)
     targetMemMB uint64    // desired memory load in MB
     workerDuty  []float64 // per-worker duty cycle (0..1)
-    actualCPU   float64   // measured load in cores
+    actualCPU   float64   // measured CPU load in cores
 
     cpuMutex sync.RWMutex
 
@@ -71,14 +71,14 @@ func main() {
 	}
 
     var port int
-    flag.Float64Var(&targetCPU, "cpu", 0, "target CPU load in cores (fractional, e.g. 0.5 for half-core)")
+    flag.Float64Var(&targetCPU, "cores", 0, "target CPU load in cores (fractional, e.g. 0.5 for half-core)")
     flag.Uint64Var(&targetMemMB, "mem", 0, "target memory usage in MB")
     flag.IntVar(&port, "port", 8080, "REST API port")
     flag.Parse()
 
-    // validate cpu value against available cores
+    // validate cores value against available cores
     if targetCPU < 0 || targetCPU > float64(runtime.NumCPU()) {
-        fmt.Fprintf(os.Stderr, "Invalid cpu value: must be between 0 and %d cores\n", runtime.NumCPU())
+        fmt.Fprintf(os.Stderr, "Invalid cores value: must be between 0 and %d cores\n", runtime.NumCPU())
         os.Exit(1)
     }
 
@@ -164,10 +164,11 @@ func cpuWorker(id int) {
 }
 
 func busy(d time.Duration) {
-	end := time.Now().Add(d)
-	for time.Now().Before(end) {
-	}
+   end := time.Now().Add(d)
+   for time.Now().Before(end) {
+   }
 }
+
 // updateWorkerDuty computes per-worker duty fraction from targetCPU
 func updateWorkerDuty() {
     cpuMutex.Lock()
@@ -220,35 +221,37 @@ func allocMem(mb uint64) {
 	debug.FreeOSMemory()
 }
 
+// loadRequest is the JSON body for adjusting load
 type loadRequest struct {
-	CPU *float64 `json:"cpu,omitempty"`
-	Mem *uint64  `json:"mem,omitempty"`
+   Cores *float64 `json:"cores,omitempty"`
+   Mem   *uint64  `json:"mem,omitempty"`
 }
 
+// loadResponse is the JSON response for current load
 type loadResponse struct {
-	TargetCPU   float64 `json:"target_cpu"`
-	ActualCPU   float64 `json:"actual_cpu"`
-	TargetMemMB uint64  `json:"target_memory_mb"`
-	ActualMemMB uint64  `json:"actual_memory_mb"`
+   TargetCores   float64 `json:"target_cores"`
+   ActualCores   float64 `json:"actual_cores"`
+   TargetMemMB   uint64  `json:"target_memory_mb"`
+   ActualMemMB   uint64  `json:"actual_memory_mb"`
 }
 
 func loadHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case http.MethodGet:
-		cpuMutex.RLock()
-		tCPU := targetCPU
-		aCPU := actualCPU
-		cpuMutex.RUnlock()
-		memMutex.Lock()
-		tMem := targetMemMB
-		aMem := uint64(len(memBuffer)) / MB
-		memMutex.Unlock()
-		resp := loadResponse{
-			TargetCPU:   tCPU,
-			ActualCPU:   aCPU,
-			TargetMemMB: tMem,
-			ActualMemMB: aMem,
-		}
+    case http.MethodGet:
+        cpuMutex.RLock()
+        tCores := targetCPU
+        aCores := actualCPU
+        cpuMutex.RUnlock()
+        memMutex.Lock()
+        tMem := targetMemMB
+        aMem := uint64(len(memBuffer)) / MB
+        memMutex.Unlock()
+        resp := loadResponse{
+            TargetCores:   tCores,
+            ActualCores:   aCores,
+            TargetMemMB:   tMem,
+            ActualMemMB:   aMem,
+        }
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	case http.MethodPost:
@@ -257,39 +260,39 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-        if req.CPU != nil {
-        c := *req.CPU
-        if c < 0 || c > float64(numCPU) {
-            http.Error(w, fmt.Sprintf("cpu must be between 0 and %.2f cores", float64(numCPU)), http.StatusBadRequest)
-            return
-        }
-        cpuMutex.Lock()
-        targetCPU = c
-        cpuMutex.Unlock()
-        // update per-worker duty cycles based on new target
-        updateWorkerDuty()
+        if req.Cores != nil {
+            c := *req.Cores
+            if c < 0 || c > float64(numCPU) {
+                http.Error(w, fmt.Sprintf("cores must be between 0 and %.2f", float64(numCPU)), http.StatusBadRequest)
+                return
+            }
+            cpuMutex.Lock()
+            targetCPU = c
+            cpuMutex.Unlock()
+            // update per-worker duty cycles based on new target cores
+            updateWorkerDuty()
         }
 		if req.Mem != nil {
 			m := *req.Mem
 			targetMemMB = m
 			allocMem(m)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		cpuMutex.RLock()
-		tCPU := targetCPU
-		aCPU := actualCPU
-		cpuMutex.RUnlock()
-		memMutex.Lock()
-		tMem := targetMemMB
-		aMem := uint64(len(memBuffer)) / MB
-		memMutex.Unlock()
-		resp := loadResponse{
-			TargetCPU:   tCPU,
-			ActualCPU:   aCPU,
-			TargetMemMB: tMem,
-			ActualMemMB: aMem,
-		}
-		json.NewEncoder(w).Encode(resp)
+        w.Header().Set("Content-Type", "application/json")
+        cpuMutex.RLock()
+        tCores := targetCPU
+        aCores := actualCPU
+        cpuMutex.RUnlock()
+        memMutex.Lock()
+        tMem := targetMemMB
+        aMem := uint64(len(memBuffer)) / MB
+        memMutex.Unlock()
+        resp := loadResponse{
+            TargetCores:   tCores,
+            ActualCores:   aCores,
+            TargetMemMB:   tMem,
+            ActualMemMB:   aMem,
+        }
+        json.NewEncoder(w).Encode(resp)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
