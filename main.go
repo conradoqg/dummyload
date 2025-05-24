@@ -50,16 +50,18 @@ func docsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(swaggerUIHTML))
 }
 
+// Globals for CPU and memory load
 var (
-	targetCPU   float64
-	targetMemMB uint64
-	dutyCycle   float64
-	actualCPU   float64
+    targetCPU   float64   // desired load in cores (can be fractional)
+    targetMemMB uint64    // desired memory load in MB
+    workerDuty  []float64 // per-worker duty cycle (0..1)
+    actualCPU   float64   // measured load in cores
 
-	cpuMutex sync.RWMutex
+    cpuMutex sync.RWMutex
 
-	memBuffer []byte
-	memMutex  sync.Mutex
+    memBuffer []byte
+    memMutex  sync.Mutex
+    numCPU    int
 )
 
 func main() {
@@ -68,27 +70,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	var port int
-	flag.Float64Var(&targetCPU, "cpu", 0, "target CPU usage percentage (0-100)")
-	flag.Uint64Var(&targetMemMB, "mem", 0, "target memory usage in MB")
-	flag.IntVar(&port, "port", 8081, "REST API port")
-	flag.Parse()
+    var port int
+    flag.Float64Var(&targetCPU, "cpu", 0, "target CPU load in cores (fractional, e.g. 0.5 for half-core)")
+    flag.Uint64Var(&targetMemMB, "mem", 0, "target memory usage in MB")
+    flag.IntVar(&port, "port", 8080, "REST API port")
+    flag.Parse()
 
-	if targetCPU < 0 || targetCPU > 100 {
-		fmt.Fprintln(os.Stderr, "Invalid cpu value: must be between 0 and 100")
-		os.Exit(1)
-	}
+    // validate cpu value against available cores
+    if targetCPU < 0 || targetCPU > float64(runtime.NumCPU()) {
+        fmt.Fprintf(os.Stderr, "Invalid cpu value: must be between 0 and %d cores\n", runtime.NumCPU())
+        os.Exit(1)
+    }
 
-	dutyCycle = targetCPU / 100.0
+    // determine number of CPU cores and setup per-worker duty
+    numCPU = runtime.NumCPU()
+    workerDuty = make([]float64, numCPU)
+    updateWorkerDuty()
+    if targetMemMB > 0 {
+        allocMem(targetMemMB)
+    }
 
-	if targetMemMB > 0 {
-		allocMem(targetMemMB)
-	}
+    // start CPU monitor and spawn workers
+    go monitorCPU()
+    for i := 0; i < numCPU; i++ {
+        go cpuWorker(i)
+    }
 
-	prev := readStats()
-
-	go cpuController(prev)
-	go cpuWorker()
 
 	http.HandleFunc("/api/v1/load", loadHandler)
 	// Serve OpenAPI spec and Swagger UI
@@ -96,10 +103,10 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(swaggerSpec)
 	})
-	http.HandleFunc("/docs", docsHandler)
-	http.HandleFunc("/docs/", docsHandler)
+    // Serve Swagger UI at root
+    http.HandleFunc("/", docsHandler)
 	addr := fmt.Sprintf(":%d", port)
-	fmt.Printf("Starting dummyload: cpu=%.1f%%, mem=%dMB, listening on %s\n", targetCPU, targetMemMB, addr)
+    fmt.Printf("Starting dummyload: cores=%.2f, mem=%dMB, workers=%d, listening on %s\n", targetCPU, targetMemMB, numCPU, addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		fmt.Fprintln(os.Stderr, "HTTP server error:", err)
 		os.Exit(1)
@@ -135,64 +142,69 @@ func readStats() cpuStats {
 	return cpuStats{idle: idle, total: total}
 }
 
-func cpuController(prev cpuStats) {
-	period := 100 * time.Millisecond
-	Kp := 0.1
 
-	for {
-		time.Sleep(period)
-
-		current := readStats()
-		idleDelta := current.idle - prev.idle
-		totalDelta := current.total - prev.total
-		var usage float64
-		if totalDelta > 0 {
-			usage = (1.0 - float64(idleDelta)/float64(totalDelta)) * 100.0
-		} else {
-			usage = 0
-		}
-		prev = current
-
-		cpuMutex.Lock()
-		actualCPU = usage
-
-		target := targetCPU
-		error := target - usage
-		dutyCycle += (Kp * error) / 100.0
-		if dutyCycle < 0 {
-			dutyCycle = 0
-		} else if dutyCycle > 1 {
-			dutyCycle = 1
-		}
-		cpuMutex.Unlock()
-	}
-}
-
-func cpuWorker() {
-	period := 100 * time.Millisecond
-
-	for {
-		cpuMutex.RLock()
-		dc := dutyCycle
-		cpuMutex.RUnlock()
-
-		if dc <= 0 {
-			time.Sleep(period)
-		} else if dc >= 1 {
-			busy(period)
-		} else {
-			on := time.Duration(dc * float64(period))
-			off := period - on
-			busy(on)
-			time.Sleep(off)
-		}
-	}
+// cpuWorker spins in a loop, busy/sleep according to its duty fraction
+func cpuWorker(id int) {
+   period := 100 * time.Millisecond
+   for {
+       cpuMutex.RLock()
+       dc := workerDuty[id]
+       cpuMutex.RUnlock()
+       if dc <= 0 {
+           time.Sleep(period)
+       } else if dc >= 1 {
+           busy(period)
+       } else {
+           on := time.Duration(dc * float64(period))
+           off := period - on
+           busy(on)
+           time.Sleep(off)
+       }
+   }
 }
 
 func busy(d time.Duration) {
 	end := time.Now().Add(d)
 	for time.Now().Before(end) {
 	}
+}
+// updateWorkerDuty computes per-worker duty fraction from targetCPU
+func updateWorkerDuty() {
+    cpuMutex.Lock()
+    defer cpuMutex.Unlock()
+    full := int(targetCPU)
+    frac := targetCPU - float64(full)
+    for i := 0; i < numCPU; i++ {
+        switch {
+        case i < full:
+            workerDuty[i] = 1.0
+        case i == full:
+            workerDuty[i] = frac
+        default:
+            workerDuty[i] = 0.0
+        }
+    }
+}
+
+// monitorCPU periodically samples /proc/stat to update actualCPU
+func monitorCPU() {
+    period := 500 * time.Millisecond
+    prev := readStats()
+    for {
+        time.Sleep(period)
+        current := readStats()
+        idleDelta := current.idle - prev.idle
+        totalDelta := current.total - prev.total
+        var usageFrac float64
+        if totalDelta > 0 {
+            usageFrac = 1.0 - float64(idleDelta)/float64(totalDelta)
+        }
+        prev = current
+
+        cpuMutex.Lock()
+        actualCPU = usageFrac * float64(numCPU)
+        cpuMutex.Unlock()
+    }
 }
 
 func allocMem(mb uint64) {
@@ -245,17 +257,18 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if req.CPU != nil {
-			c := *req.CPU
-			if c < 0 || c > 100 {
-				http.Error(w, "cpu must be between 0 and 100", http.StatusBadRequest)
-				return
-			}
-			cpuMutex.Lock()
-			targetCPU = c
-			dutyCycle = c / 100.0
-			cpuMutex.Unlock()
-		}
+        if req.CPU != nil {
+        c := *req.CPU
+        if c < 0 || c > float64(numCPU) {
+            http.Error(w, fmt.Sprintf("cpu must be between 0 and %.2f cores", float64(numCPU)), http.StatusBadRequest)
+            return
+        }
+        cpuMutex.Lock()
+        targetCPU = c
+        cpuMutex.Unlock()
+        // update per-worker duty cycles based on new target
+        updateWorkerDuty()
+        }
 		if req.Mem != nil {
 			m := *req.Mem
 			targetMemMB = m
