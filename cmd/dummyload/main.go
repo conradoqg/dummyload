@@ -1,23 +1,27 @@
 package main
 
 import (
-	_ "embed"
-	"encoding/json"
-	"flag"
-	"fmt"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"runtime"
-	"runtime/debug"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
+   _ "embed"
+   "encoding/json"
+   "flag"
+   "fmt"
+   "log"
+   "io/ioutil"
+   "net/http"
+   "os"
+   "runtime"
+   "runtime/debug"
+   "strconv"
+   "strings"
+   "sync"
+   "time"
 )
 
 //go:embed swagger.json
 var swaggerSpec []byte
+
+// Version is the CLI version string
+const Version = "0.1.0"
 
 const swaggerUIHTML = `<!DOCTYPE html>
 <html>
@@ -65,18 +69,24 @@ var (
 )
 
 func main() {
+	var port int
+	var versionFlag bool
+	flag.Float64Var(&targetCPU, "cores", 0, "target CPU load in cores (fractional, e.g. 0.5 for half-core)")
+	flag.Uint64Var(&targetMemMB, "mem", 0, "target memory usage in MB")
+	flag.IntVar(&port, "port", 8081, "REST API port")
+	flag.BoolVar(&versionFlag, "version", false, "print version and exit")
+	flag.Parse()
+
+	if versionFlag {
+		fmt.Printf("dummyload version %s\n", Version)
+		os.Exit(0)
+	}
+
 	if runtime.GOOS != "linux" {
 		fmt.Fprintln(os.Stderr, "Unsupported OS: dummyload only supports Linux")
 		os.Exit(1)
 	}
 
-	var port int
-	flag.Float64Var(&targetCPU, "cores", 0, "target CPU load in cores (fractional, e.g. 0.5 for half-core)")
-	flag.Uint64Var(&targetMemMB, "mem", 0, "target memory usage in MB")
-	flag.IntVar(&port, "port", 8081, "REST API port")
-	flag.Parse()
-
-	// validate cores value against available cores
 	if targetCPU < 0 || targetCPU > float64(runtime.NumCPU()) {
 		fmt.Fprintf(os.Stderr, "Invalid cores value: must be between 0 and %d cores\n", runtime.NumCPU())
 		os.Exit(1)
@@ -105,10 +115,9 @@ func main() {
 	// Serve Swagger UI at root
 	http.HandleFunc("/", docsHandler)
 	addr := fmt.Sprintf(":%d", port)
-	fmt.Printf("Starting dummyload: cores=%.2f, mem=%dMB, workers=%d, listening on %s\n", targetCPU, targetMemMB, numCPU, addr)
+	log.Printf("Starting dummyload version %s: cores=%.2f, mem=%dMB, workers=%d, listening on %s", Version, targetCPU, targetMemMB, numCPU, addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
-		fmt.Fprintln(os.Stderr, "HTTP server error:", err)
-		os.Exit(1)
+		log.Fatalf("HTTP server error: %v", err)
 	}
 }
 
@@ -346,6 +355,7 @@ func loadHandler(w http.ResponseWriter, r *http.Request) {
 			TargetMemMB: tMem,
 			ActualMemMB: aMem,
 		}
+		log.Printf("Configuration updated: target_cores=%.2f, target_memory_mb=%dMB", resp.TargetCores, resp.TargetMemMB)
 		json.NewEncoder(w).Encode(resp)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
