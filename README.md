@@ -80,5 +80,15 @@ Browse to http://localhost:8080/ to view and interact with the API documentation
 Launch the **Debug dummyload** configuration in `.vscode/launch.json` to run under the Go debugger (Delve).
 
 ---
+## Kubernetes Manifests
+
+We include Kubernetes manifests for deploying and scaling dummyload in the `k8s` directory. To apply, run:
+
+```bash
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/hpa.yaml
+```
+
+Ensure you have a metrics server running in your cluster to enable the Horizontal Pod Autoscaler.
 
 Pull requests and issues are welcome! Feel free to contribute improvements or report bugs.

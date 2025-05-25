@@ -12,7 +12,7 @@ help:
 	@echo "  make docker-run    Build and run the Docker image"
 
 build:
-	go build -ldflags="-s -w" -o $(APP) main.go
+	go build -ldflags="-s -w" -o $(APP) ./cmd/$(APP)
 
 run: build
 	./$(APP) -cores 1.5 -mem 200 -port 8080

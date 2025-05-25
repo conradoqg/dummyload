@@ -8,7 +8,7 @@ COPY go.mod ./
 RUN go mod download
 COPY . .
 # Build a statically linked binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dummyload main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dummyload ./cmd/dummyload
 
 # Final stage: minimal static image
 FROM scratch
