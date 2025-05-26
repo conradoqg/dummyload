@@ -1,20 +1,20 @@
 package main
 
 import (
-   _ "embed"
-   "encoding/json"
-   "flag"
-   "fmt"
-   "log"
-   "io/ioutil"
-   "net/http"
-   "os"
-   "runtime"
-   "runtime/debug"
-   "strconv"
-   "strings"
-   "sync"
-   "time"
+	_ "embed"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"runtime"
+	"runtime/debug"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 //go:embed swagger.json
@@ -27,17 +27,101 @@ const swaggerUIHTML = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>dummyload API Docs</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+  <title>dummyload Control Panel</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    label { display: block; margin-top: 10px; }
+    input { margin-top: 5px; padding: 5px; width: 200px; }
+    button { margin-top: 10px; padding: 5px 10px; }
+    .status { margin-top: 20px; }
+    .status div { margin-bottom: 5px; }
+    .error { color: red; }
+  </style>
 </head>
 <body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+  <h1>dummyload Control Panel</h1>
+  <form id="load-form">
+    <label for="cpu-input">CPU (cores, e.g. 0.5 or 500m)</label>
+    <input type="text" id="cpu-input" name="cpu" placeholder="e.g. 0.5 or 500m" />
+    <label for="mem-input">Memory (MiB/GiB, e.g. 256Mi or 1Gi)</label>
+    <input type="text" id="mem-input" name="mem" placeholder="e.g. 256Mi or 1Gi" />
+    <button type="submit">Set</button>
+    <div id="error" class="error"></div>
+  </form>
+  <div class="status">
+    <h2>Current Configuration</h2>
+    <div>Target CPU: <span id="target-cpu"></span></div>
+    <div>Actual CPU: <span id="actual-cpu"></span></div>
+    <div>Target Memory: <span id="target-mem"></span></div>
+    <div>Actual Memory: <span id="actual-mem"></span></div>
+  </div>
   <script>
-    SwaggerUIBundle({
-      url: '/swagger.json',
-      dom_id: '#swagger-ui'
+    function parseCpu(str) {
+      const m = str.match(/^([0-9.]+)m$/);
+      if (m) {
+        return parseFloat(m[1]) / 1000;
+      }
+      const v = parseFloat(str);
+      if (isNaN(v)) throw 'Invalid CPU value';
+      return v;
+    }
+    function parseMem(str) {
+      const mMi = str.match(/^([0-9.]+)Mi$/i);
+      if (mMi) return parseFloat(mMi[1]);
+      const mGi = str.match(/^([0-9.]+)Gi$/i);
+      if (mGi) return parseFloat(mGi[1]) * 1024;
+      const v = parseFloat(str);
+      if (isNaN(v)) throw 'Invalid memory value';
+      return v;
+    }
+    function toCpuStr(v) {
+      if (v < 1) {
+        return (v * 1000).toFixed(0) + 'm';
+      }
+      return v.toFixed(2).replace(/\.00$/, '');
+    }
+    function toMemStr(v) {
+      if (v % 1024 === 0) {
+        return (v / 1024) + 'Gi';
+      }
+      return v + 'Mi';
+    }
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/v1/load');
+        const data = await res.json();
+        document.getElementById('target-cpu').textContent = toCpuStr(data.target_cores);
+        document.getElementById('actual-cpu').textContent = data.actual_cores.toFixed(2);
+        document.getElementById('target-mem').textContent = toMemStr(data.target_memory_mb);
+        document.getElementById('actual-mem').textContent = data.actual_memory_mb + 'Mi';
+      } catch(err) {
+        console.error('Fetch status error', err);
+      }
+    }
+    document.getElementById('load-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errDiv = document.getElementById('error');
+      errDiv.textContent = '';
+      try {
+        const cpuVal = document.getElementById('cpu-input').value;
+        const memVal = document.getElementById('mem-input').value;
+        const payload = {};
+        if (cpuVal) payload.cores = parseCpu(cpuVal);
+        if (memVal) payload.mem = Math.round(parseMem(memVal));
+        await fetch('/api/v1/load', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        document.getElementById('cpu-input').value = '';
+        document.getElementById('mem-input').value = '';
+        fetchStatus();
+      } catch(err) {
+        errDiv.textContent = err;
+      }
     });
+    fetchStatus();
+    setInterval(fetchStatus, 2000);
   </script>
 </body>
 </html>`
