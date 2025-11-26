@@ -19,6 +19,15 @@ spec:
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
+          args:
+            - "-cores"
+            - "0.1"
+            - "-mem"
+            - "200"
+            - "-ready-delay-ms"
+            - "2000"
+            - "-live-delay-ms"
+            - "2000"
           readinessProbe:
             httpGet:
               path: /readyz

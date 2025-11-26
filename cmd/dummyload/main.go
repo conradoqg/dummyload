@@ -331,7 +331,17 @@ func main() {
 	// Serve Control Panel at root
 	http.HandleFunc("/", controlPanelHandler)
 	addr := fmt.Sprintf(":%d", port)
-	log.Printf("Starting dummyload version %s: cores=%.2f, mem=%dMB, workers=%d, listening on %s", Version, targetCPU, targetMemMB, numCPU, addr)
+	log.Printf("Starting dummyload version %s: cores=%.2f, mem=%dMB, workers=%d, ready=%t, live=%t, ready_delay_ms=%d, live_delay_ms=%d, listening on %s",
+		Version,
+		targetCPU,
+		targetMemMB,
+		numCPU,
+		readyOK,
+		liveOK,
+		int(readyDelay/time.Millisecond),
+		int(liveDelay/time.Millisecond),
+		addr,
+	)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("HTTP server error: %v", err)
 	}
