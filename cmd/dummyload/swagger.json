@@ -40,6 +40,42 @@
           }
         }
       }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "Get current readiness and liveness configuration",
+        "responses": {
+          "200": {
+            "description": "Health configuration",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HealthConfig"}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Update readiness/liveness status and delays",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/HealthConfigRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated health configuration",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/HealthConfig"}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -60,6 +96,25 @@
           "target_memory_mb": {"type": "integer", "format": "int64", "description": "Requested memory load in megabytes."},
           "actual_memory_mb": {"type": "integer", "format": "int64", "description": "Measured memory load in megabytes."}
         }
+      },
+      "HealthConfig": {
+        "type": "object",
+        "properties": {
+          "ready": {"type": "boolean", "description": "Whether readiness probe should succeed."},
+          "live": {"type": "boolean", "description": "Whether liveness probe should succeed."},
+          "ready_delay_ms": {"type": "integer", "format": "int64", "minimum": 0, "description": "Artificial delay in milliseconds for readiness probe."},
+          "live_delay_ms": {"type": "integer", "format": "int64", "minimum": 0, "description": "Artificial delay in milliseconds for liveness probe."}
+        }
+      },
+      "HealthConfigRequest": {
+        "type": "object",
+        "properties": {
+          "ready": {"type": "boolean"},
+          "live": {"type": "boolean"},
+          "ready_delay_ms": {"type": "integer", "format": "int64", "minimum": 0},
+          "live_delay_ms": {"type": "integer", "format": "int64", "minimum": 0}
+        },
+        "description": "Specify desired readiness/liveness status and probe delays in milliseconds."
       }
     }
   }

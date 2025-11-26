@@ -1,13 +1,16 @@
 # Dummyload
 
-Dummyload is a simple Go-based CLI and containerized tool to generate controlled CPU and memory load (in cores and MB) on Linux systems or within containers (Docker / Kubernetes). It self-regulates to match a specified number of CPU cores (including fractional, e.g. 1.5 cores) and memory footprint, and provides a REST API with an interactive Swagger UI.
+Dummyload is a simple Go-based CLI and containerized tool to generate controlled CPU and memory load (in cores and MB) on Linux systems or within containers (Docker / Kubernetes). It self-regulates to match a specified number of CPU cores (including fractional, e.g. 1.5 cores) and memory footprint, and provides a REST API with an interactive web Control Panel.
 
 ## Features
 - Generate CPU load across logical cores: fully load N cores and optionally partially load one more.
 - Allocate and hold a specified amount of memory (in MB).
 - Self-monitor and report actual CPU cores in use.
 - REST API (`/api/v1/load`) to GET current/target load and POST adjustments on-the-fly.
-- Embedded Swagger UI at `/` for easy testing.
+- Health configuration API (`/api/v1/health`) to control readiness/liveness behavior at runtime.
+- Kubernetes-style readiness (`/readyz`) and liveness (`/livez`) endpoints with configurable success/failure and artificial delay.
+- Embedded web Control Panel at `/` for easy testing, including sections for load and Kubernetes probes.
+- Structured logging for readiness and liveness probe requests (start/completion, status code, latency, bytes).
 - Multi-stage Dockerfile for minimal container image.
 - `Makefile` for build, run, and Docker workflows.
 - VSCode `launch.json` for local debugging with Delve.
@@ -60,14 +63,41 @@ curl -X POST http://localhost:8080/api/v1/load \
 
 Response echoes the updated state.
 
-## Swagger UI
+#### GET /api/v1/health
+Returns current readiness/liveness configuration:
+```json
+{
+  "ready": true,
+  "live": true,
+  "ready_delay_ms": 0,
+  "live_delay_ms": 0
+}
+```
 
-Browse to http://localhost:8080/ to view and interact with the API documentation.
+#### POST /api/v1/health
+Update readiness/liveness success and/or delays (all fields optional):
+```bash
+curl -X POST http://localhost:8080/api/v1/health \
+     -H 'Content-Type: application/json' \
+     -d '{"ready":false, "ready_delay_ms":5000}'
+```
+
+Probe endpoints for Kubernetes:
+- `GET /readyz` – readiness probe, returns 200/503 and respects `ready_delay_ms`.
+- `GET /livez`  – liveness probe, returns 200/503 and respects `live_delay_ms`.
+
+## Control Panel
+
+Browse to http://localhost:8080/ to view and interact with the API control panel and API documentation.
 
 ## Configuration Flags
 - `-cores` : target load in CPU cores (float; 0 ≤ cores ≤ NumCPU).
 - `-mem`   : target memory load in MB (integer ≥ 0).
 - `-port`  : HTTP port (default: 8080).
+- `-ready` : initial readiness probe success (boolean, default: true).
+- `-live`  : initial liveness probe success (boolean, default: true).
+- `-ready-delay-ms` : initial readiness probe delay in milliseconds (integer ≥ 0).
+- `-live-delay-ms`  : initial liveness probe delay in milliseconds (integer ≥ 0).
 
 ## Development
 - `make build`     – build `dummyload` binary.
@@ -89,6 +119,6 @@ kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/hpa.yaml
 ```
 
-Ensure you have a metrics server running in your cluster to enable the Horizontal Pod Autoscaler.
+The sample deployment configures readiness and liveness probes against `/readyz` and `/livez` with a 10-second timeout and approximately 30-second verification window. Ensure you have a metrics server running in your cluster to enable the Horizontal Pod Autoscaler.
 
 Pull requests and issues are welcome! Feel free to contribute improvements or report bugs.
