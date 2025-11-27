@@ -9,7 +9,7 @@ Dummyload is a simple Go-based CLI and containerized tool to generate controlled
 - REST API (`/api/v1/load`) to GET current/target load and POST adjustments on-the-fly.
 - Health configuration API (`/api/v1/health`) to control readiness/liveness behavior at runtime.
 - Kubernetes-style readiness (`/readyz`) and liveness (`/livez`) endpoints with configurable success/failure and artificial delay.
-- Embedded web Control Panel at `/` for easy testing, including sections for load and Kubernetes probes.
+- Embedded web Control Panel at `/controlpanel` for easy testing, including sections for load and Kubernetes probes.
 - Structured logging for readiness and liveness probe requests (start/completion, status code, latency, bytes).
 - Multi-stage Dockerfile for minimal container image.
 - `Makefile` for build, run, and Docker workflows.
@@ -88,7 +88,7 @@ Probe endpoints for Kubernetes:
 
 ## Control Panel
 
-Browse to http://localhost:8080/ to view and interact with the API control panel and API documentation.
+Browse to http://localhost:8080/controlpanel to view and interact with the API control panel and API documentation. The root path (`/`) serves a simple hello page suitable as a default landing endpoint.
 
 ## Configuration Flags
 - `-cores` : target load in CPU cores (float; 0 ≤ cores ≤ NumCPU).

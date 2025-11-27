@@ -231,6 +231,22 @@ const controlPanelHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+const homeHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>dummyload</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+  <main class="container">
+    <h1>dummyload</h1>
+    <p>Hello from <code>dummyload</code>. This service exposes a REST API for generating CPU and memory load, plus Kubernetes-style readiness and liveness probes.</p>
+    <p>Use the <a href="/controlpanel">Control Panel</a> to interactively configure load and probe behavior.</p>
+  </main>
+</body>
+</html>`
+
 const MB = 1024 * 1024
 
 type cpuStats struct {
@@ -241,6 +257,12 @@ type cpuStats struct {
 func controlPanelHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(controlPanelHTML))
+}
+
+// homeHandler serves a simple hello page at /
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(homeHTML))
 }
 
 // Globals for CPU and memory load
@@ -328,8 +350,9 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(apiSpec)
 	})
-	// Serve Control Panel at root
-	http.HandleFunc("/", controlPanelHandler)
+	// Serve Control Panel under /controlpanel and a simple hello page at root
+	http.HandleFunc("/controlpanel", controlPanelHandler)
+	http.HandleFunc("/", homeHandler)
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("Starting dummyload version %s: cores=%.2f, mem=%dMB, workers=%d, ready=%t, live=%t, ready_delay_ms=%d, live_delay_ms=%d, listening on %s",
 		Version,
